@@ -1,53 +1,73 @@
-package org.jgroups.protocols;
+package org.jgroups.protocols.mongo;
+
+import static com.mongodb.client.model.Filters.and;
+import static com.mongodb.client.model.Filters.eq;
+
+import java.util.LinkedList;
+import java.util.List;
 
 import com.mongodb.ConnectionString;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
-import com.mongodb.client.model.Filters;
 import org.bson.Document;
 import org.jgroups.Address;
 import org.jgroups.PhysicalAddress;
 import org.jgroups.View;
 import org.jgroups.annotations.Property;
+import org.jgroups.conf.ClassConfigurator;
+import org.jgroups.protocols.JDBC_PING2;
+import org.jgroups.protocols.PingData;
 import org.jgroups.protocols.relay.SiteUUID;
 import org.jgroups.stack.IpAddress;
 import org.jgroups.util.NameCache;
 import org.jgroups.util.Util;
 
-import java.sql.*;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.Executor;
-
-import static com.mongodb.client.model.Filters.and;
-import static com.mongodb.client.model.Filters.eq;
-
+/**
+ * Discovery protocol using MongoDB as a shared store for cluster member information.
+ * This protocol stores node discovery data (address, name, IP, coordinator status) in a MongoDB collection.
+ * <p>
+ * Configuration example:
+ * <pre>{@code
+ * <mongo.MONGO_PING connection_url="mongodb://localhost:27017/jgroups"
+ *                   collection_name="jgroups-ping"
+ *                   remove_all_data_on_view_change="true"/>
+ * }</pre>
+ * <p>
+ * The connection URL must include the database name (e.g., {@code mongodb://host:port/database}).
+ *
+ * @author rsobies
+ * @author Radoslav Husar
+ */
 public class MONGO_PING extends JDBC_PING2 {
 
-    protected static final String CLUSTERNAME = "clustername";
-    protected static final String NAME = "name";
-    protected static final String IP = "ip";
-    protected static final String ISCOORD = "isCoord";
+    static {
+        // TODO - this is an external protocol not currently registered in jg-protocol-ids.xml
+        // TODO what magic ID to use now?
+        ClassConfigurator.addProtocol((short) 780, MONGO_PING.class);
+    }
 
-    @Property(description = "todo")
-    protected String collection_name = "jgroups-apps";
+    // Constants
+    private static final String CLUSTERNAME_KEY = "clustername";
+    private static final String NAME_KEY = "name";
+    private static final String IP_KEY = "ip";
+    private static final String ISCOORD_KEY = "isCoord";
+
+    @Property(description = "Name of the MongoDB collection used to store cluster member information")
+    protected String collection_name = "jgroups-ping";
 
     @Override
-    public MONGO_PING setConnectionUrl(String c) {
-        this.connection_url = c;
+    public MONGO_PING setConnectionUrl(String connectionUrl) {
+        this.connection_url = connectionUrl;
         return this;
     }
 
-    public String getCollection_name() {
+    public String getCollectionName() {
         return collection_name;
     }
 
-    public MONGO_PING setCollection_name(String collection_name) {
-        this.collection_name = collection_name;
+    public MONGO_PING setCollectionName(String collectionName) {
+        this.collection_name = collectionName;
         return this;
     }
 
@@ -57,6 +77,7 @@ public class MONGO_PING extends JDBC_PING2 {
 
     protected MongoCollection<Document> getCollection(MongoClient client) {
         var connString = new ConnectionString(connection_url);
+        assert connString.getDatabase() != null;
         var db = client.getDatabase(connString.getDatabase());
         return db.getCollection(collection_name);
     }
@@ -70,7 +91,7 @@ public class MONGO_PING extends JDBC_PING2 {
             return;
         }
         String cluster_name = getClusterName();
-        try(var mongoClient = getMongoConnection()){
+        try (var mongoClient = getMongoConnection()) {
             var collection = getCollection(mongoClient);
             try {
                 List<PingData> list = readFromDB(mongoClient, getClusterName());
@@ -96,7 +117,7 @@ public class MONGO_PING extends JDBC_PING2 {
     protected void clearTable(String clustername) {
         try (var mongoClient = getMongoConnection()) {
             var collection = getCollection(mongoClient);
-            collection.deleteMany(eq(CLUSTERNAME, clustername));
+            collection.deleteMany(eq(CLUSTERNAME_KEY, clustername));
         }
     }
 
@@ -121,10 +142,10 @@ public class MONGO_PING extends JDBC_PING2 {
             PhysicalAddress ip_addr = data.getPhysicalAddr();
             String ip = ip_addr.toString();
             collection.insertOne(new Document("_id", addr)
-                    .append(NAME, name)
-                    .append(CLUSTERNAME, clustername)
-                    .append(IP, ip)
-                    .append(ISCOORD, data.isCoord())
+                    .append(NAME_KEY, name)
+                    .append(CLUSTERNAME_KEY, clustername)
+                    .append(IP_KEY, ip)
+                    .append(ISCOORD_KEY, data.isCoord())
             );
         } finally {
             lock.unlock();
@@ -147,7 +168,7 @@ public class MONGO_PING extends JDBC_PING2 {
 
     protected List<PingData> readFromDB(MongoClient mongoClient, String cluster) throws Exception {
         var collection = getCollection(mongoClient);
-        try (var iterator = collection.find(eq(CLUSTERNAME, cluster)).iterator()) {
+        try (var iterator = collection.find(eq(CLUSTERNAME_KEY, cluster)).iterator()) {
             reads++;
             List<PingData> retval = new LinkedList<>();
 
@@ -155,10 +176,10 @@ public class MONGO_PING extends JDBC_PING2 {
                 var doc = iterator.next();
                 String uuid = doc.get("_id", String.class);
                 Address addr = Util.addressFromString(uuid);
-                String name = doc.get(NAME, String.class);
-                String ip = doc.get(IP, String.class);
+                String name = doc.get(NAME_KEY, String.class);
+                String ip = doc.get(IP_KEY, String.class);
                 IpAddress ip_addr = new IpAddress(ip);
-                boolean coord = doc.get(ISCOORD, Boolean.class);
+                boolean coord = doc.get(ISCOORD_KEY, Boolean.class);
                 PingData data = new PingData(addr, true, name, ip_addr).coord(coord);
                 retval.add(data);
             }
@@ -178,9 +199,8 @@ public class MONGO_PING extends JDBC_PING2 {
         lock.lock();
         try {
             String addr = Util.addressToString(addressToDelete);
-            collection.deleteOne(and(eq("_id", addr), eq(CLUSTERNAME, clustername)));
-        }
-       finally {
+            collection.deleteOne(and(eq("_id", addr), eq(CLUSTERNAME_KEY, clustername)));
+        } finally {
             lock.unlock();
         }
     }
