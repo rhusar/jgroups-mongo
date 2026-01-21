@@ -84,7 +84,7 @@ Based on default tcp.xml with discovery replaced with mongo.MONGO_PING.
 
 == Testing
 
-Running the automated tests require a functioning podman or Docker environment.
+Running the automated tests requires a functioning podman or Docker environment.
 
 [source,shell]
 ----
@@ -93,7 +93,7 @@ Running the automated tests require a functioning podman or Docker environment.
 
 == Reporting Issues
 
-Project JGroups MONGO uses GitHub Issues for tracking:
+Project JGroups Mongo uses GitHub Issues for tracking:
 
 https://github.com/jgroups-extras/jgroups-mongo/issues
 
