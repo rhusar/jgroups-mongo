@@ -1,0 +1,111 @@
+= JGroups Mongo – `mongo.MONGO_PING`
+
+:toc:
+
+WARNING: This is an incubating project.
+
+Projects JGroups Mongo provides an implementation of `mongo.MONGO_PING` discovery protocol using MongoDB as a cluster information store.
+It uses the official MongoDB driver for Java.
+
+== Maven Coordinates
+
+[source,xml]
+----
+<dependency>
+    <groupId>org.jgroups.mongo</groupId>
+    <artifactId>jgroups-mongo</artifactId>
+    <version>1.0.0.Final</version>
+</dependency>
+----
+
+== Protocol Configuration
+
+This library implements a JGroups discovery protocol which replaces protocols such as `MPING` or `TCPPING`.
+
+[source,xml]
+----
+<mongo.MONGO_PING connection_url="mongodb://localhost:27017/test"
+                  remove_all_data_on_view_change="true"
+                  register_shutdown_hook="true"
+                  return_entire_cache="false"
+/>
+----
+
+// === Configurations Properties
+//
+// [align="left",cols="3,1,10",options="header"]
+// |===
+// | Attribute Name +
+// System Property +
+// Environment variable
+// | Default
+// | Description
+//
+// | `TODO` +
+// System property: `TODO` +
+// Environment variable: `TODO`
+// | *todo*
+// | TODO
+//
+// |===
+
+=== Example Stack
+
+[source,xml]
+----
+<!--
+Based on default tcp.xml with discovery replaced with mongo.MONGO_PING.
+-->
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns="urn:org:jgroups"
+        xsi:schemaLocation="urn:org:jgroups http://www.jgroups.org/schema/jgroups-5.5.xsd">
+    <include file="${transport-config:tcp-default.xml}"/>
+    <mongo.MONGO_PING connection_url="mongodb://localhost:27017/test"
+                      remove_all_data_on_view_change="true"
+                      register_shutdown_hook="true"
+                      return_entire_cache="false"
+    />
+    <MERGE3 min_interval="10s"
+            max_interval="30s"/>
+    <FD_SOCK2/>
+    <FD_ALL3 timeout="40s"
+             interval="5s"/>
+    <VERIFY_SUSPECT2 timeout="1.5s"/>
+    <BARRIER/>
+    <pbcast.NAKACK2 use_mcast_xmit="false"/>
+    <UNICAST3/>
+    <pbcast.STABLE desired_avg_gossip="50s"
+                   max_bytes="4M"/>
+    <pbcast.GMS print_local_addr="true"
+                join_timeout="2s"/>
+    <MFC max_credits="10M"
+         min_threshold="0.4"/>
+    <UFC max_credits="10M"
+         min_threshold="0.4"/>
+    <FRAG2 frag_size="60K"/>
+    <pbcast.STATE_TRANSFER/>
+</config>
+----
+
+== Testing
+
+Running the automated tests require a functioning podman or Docker environment.
+
+[source,shell]
+----
+./mvnw verify
+----
+
+== Reporting Issues
+
+Project JGroups MONGO uses GitHub Issues for tracking:
+
+https://github.com/jgroups-extras/jgroups-mongo/issues
+
+== Support Matrix
+
+|===
+|Version/Branch |JGroups Version |MongoDB Version |Base JDK Version
+
+|`1.x`        |`5.3.x`           |`5.6` |17
+|===
