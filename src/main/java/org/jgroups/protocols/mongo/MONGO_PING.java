@@ -112,15 +112,15 @@ public class MONGO_PING extends JDBC_PING2 {
         if (local_view == null) {
             return;
         }
-        String cluster_name = getClusterName();
-        var collection = getCollection(getMongoClient());
         try {
-            List<PingData> list = readFromDB(getMongoClient(), getClusterName());
+            String cluster_name = getClusterName();
+            var collection = getCollection(getMongoClient());
+            List<PingData> list = readAll(collection, getClusterName());
             for (PingData data : list) {
                 Address addr = data.getAddress();
                 if (!local_view.containsMember(addr)) {
                     addDiscoveryResponseToCaches(addr, data.getLogicalName(), data.getPhysicalAddr());
-                    delete(collection, cluster_name, addr);
+                    doDelete(collection, cluster_name, addr);
                 }
             }
         } catch (Exception e) {
@@ -141,28 +141,23 @@ public class MONGO_PING extends JDBC_PING2 {
 
     @Override
     protected void writeToDB(PingData data, String clustername) {
-        lock.lock();
-        try {
-            var collection = getCollection(getMongoClient());
-            Address address = data.getAddress();
-            String addr = Util.addressToString(address);
+        var collection = getCollection(getMongoClient());
+        Address address = data.getAddress();
+        String addr = Util.addressToString(address);
 
-            // Delete existing entry
-            collection.deleteOne(and(eq("_id", addr), eq(CLUSTERNAME_KEY, clustername)));
+        // Delete existing entry
+        collection.deleteOne(and(eq("_id", addr), eq(CLUSTERNAME_KEY, clustername)));
 
-            // Insert new entry
-            String name = address instanceof SiteUUID ? ((SiteUUID) address).getName() : NameCache.get(address);
-            PhysicalAddress ip_addr = data.getPhysicalAddr();
-            String ip = ip_addr.toString();
-            collection.insertOne(new Document("_id", addr)
-                    .append(NAME_KEY, name)
-                    .append(CLUSTERNAME_KEY, clustername)
-                    .append(IP_KEY, ip)
-                    .append(ISCOORD_KEY, data.isCoord())
-            );
-        } finally {
-            lock.unlock();
-        }
+        // Insert new entry
+        String name = address instanceof SiteUUID ? ((SiteUUID) address).getName() : NameCache.get(address);
+        PhysicalAddress ip_addr = data.getPhysicalAddr();
+        String ip = ip_addr.toString();
+        collection.insertOne(new Document("_id", addr)
+                .append(NAME_KEY, name)
+                .append(CLUSTERNAME_KEY, clustername)
+                .append(IP_KEY, ip)
+                .append(ISCOORD_KEY, data.isCoord())
+        );
     }
 
     @Override
@@ -180,10 +175,18 @@ public class MONGO_PING extends JDBC_PING2 {
         //do nothing
     }
 
-    protected List<PingData> readFromDB(MongoClient mongoClient, String cluster) throws Exception {
-        var collection = getCollection(mongoClient);
+    /**
+     * Reads all ping data from the collection for the given cluster.
+     */
+    private List<PingData> readAll(MongoCollection<Document> collection, String cluster) throws Exception {
         try (var iterator = collection.find(eq(CLUSTERNAME_KEY, cluster)).iterator()) {
-            reads++;
+            // Lock only for the shared counter; MongoClient is thread-safe
+            lock.lock();
+            try {
+                reads++;
+            } finally {
+                lock.unlock();
+            }
             List<PingData> retval = new LinkedList<>();
 
             while (iterator.hasNext()) {
@@ -204,22 +207,21 @@ public class MONGO_PING extends JDBC_PING2 {
 
     @Override
     protected List<PingData> readFromDB(String cluster) throws Exception {
-        return readFromDB(getMongoClient(), cluster);
+        var collection = getCollection(getMongoClient());
+        return readAll(collection, cluster);
     }
 
-    protected void delete(MongoCollection<Document> collection, String clustername, Address addressToDelete) {
-        lock.lock();
-        try {
-            String addr = Util.addressToString(addressToDelete);
-            collection.deleteOne(and(eq("_id", addr), eq(CLUSTERNAME_KEY, clustername)));
-        } finally {
-            lock.unlock();
-        }
+    /**
+     * Deletes a single entry from the collection. Does not acquire lock.
+     */
+    private void doDelete(MongoCollection<Document> collection, String clustername, Address addressToDelete) {
+        String addr = Util.addressToString(addressToDelete);
+        collection.deleteOne(and(eq("_id", addr), eq(CLUSTERNAME_KEY, clustername)));
     }
 
     @Override
     protected void delete(String clustername, Address addressToDelete) {
         var collection = getCollection(getMongoClient());
-        delete(collection, clustername, addressToDelete);
+        doDelete(collection, clustername, addressToDelete);
     }
 }
