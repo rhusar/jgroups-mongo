@@ -162,12 +162,10 @@ public class MONGO_PING extends JDBC_PING2 {
         }
     }
 
-    /**
-     * Reads all ping data from the collection for the given cluster.
-     */
-    private List<PingData> readAll(String cluster) throws Exception {
+    @Override
+    protected List<PingData> readFromDB(String cluster) throws Exception {
         try (var iterator = getCollection().find(eq(CLUSTERNAME_KEY, cluster)).iterator()) {
-            // Lock only for the shared counter; MongoClient is thread-safe
+            // Lock only for the shared counter to work around its non-volatility
             lock.lock();
             try {
                 reads++;
@@ -179,22 +177,17 @@ public class MONGO_PING extends JDBC_PING2 {
             while (iterator.hasNext()) {
                 var doc = iterator.next();
                 String uuid = doc.get("_id", String.class);
-                Address addr = Util.addressFromString(uuid);
+                Address address = Util.addressFromString(uuid);
                 String name = doc.get(NAME_KEY, String.class);
                 String ip = doc.get(IP_KEY, String.class);
-                IpAddress ip_addr = new IpAddress(ip);
-                boolean coord = Boolean.TRUE.equals(doc.get(ISCOORD_KEY, Boolean.class));
-                PingData data = new PingData(addr, true, name, ip_addr).coord(coord);
-                retval.add(data);
+                IpAddress ipAddress = new IpAddress(ip);
+                boolean isCoord = Boolean.TRUE.equals(doc.get(ISCOORD_KEY, Boolean.class));
+                PingData pingData = new PingData(address, true, name, ipAddress).coord(isCoord);
+                retval.add(pingData);
             }
 
             return retval;
         }
-    }
-
-    @Override
-    protected List<PingData> readFromDB(String cluster) throws Exception {
-        return readAll(cluster);
     }
 
     @Override
