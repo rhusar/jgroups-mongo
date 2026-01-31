@@ -62,10 +62,9 @@ public class MONGO_PING extends JDBC_PING2 {
 
     @Override
     public void init() throws Exception {
-        super.init();
-
-        // Create shared client for runtime operations
+        connectionString = new ConnectionString(connection_url);
         mongoClient = MongoClients.create(connectionString);
+        super.init();
     }
 
     @Override
@@ -163,10 +162,8 @@ public class MONGO_PING extends JDBC_PING2 {
 
     @Override
     protected void createSchema() {
-        connectionString = new ConnectionString(connection_url);
-        // Use a temporary client here since this is called during init() before the shared client is created
-        try (var client = MongoClients.create(connectionString)) {
-            var db = client.getDatabase(connectionString.getDatabase());
+        try {
+            var db = mongoClient.getDatabase(connectionString.getDatabase());
             db.createCollection(collection_name);
         } catch (MongoCommandException mex) {
             // Ignore "collection already exists" error (code 48)
