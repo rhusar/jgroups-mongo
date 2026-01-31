@@ -57,6 +57,27 @@ public class MONGO_PING extends JDBC_PING2 {
     @Property(description = "Name of the MongoDB collection used to store cluster member information")
     protected String collection_name = "jgroups-ping";
 
+    protected MongoClient mongoClient;
+
+    @Override
+    public void init() throws Exception {
+        super.init();
+
+        // Create shared client for runtime operations
+        mongoClient = MongoClients.create(connectionString);
+    }
+
+    @Override
+    public void stop() {
+        // Superclass stop() uses the client for remove()
+        super.stop();
+
+        if (mongoClient != null) {
+            mongoClient.close();
+            mongoClient = null;
+        }
+    }
+
     @Override
     public MONGO_PING setConnectionUrl(String connectionUrl) {
         this.connection_url = connectionUrl;
@@ -72,8 +93,8 @@ public class MONGO_PING extends JDBC_PING2 {
         return this;
     }
 
-    protected MongoClient getMongoConnection() {
-        return MongoClients.create(connectionString);
+    protected MongoClient getMongoClient() {
+        return mongoClient;
     }
 
     protected MongoCollection<Document> getCollection(MongoClient client) {
@@ -92,20 +113,18 @@ public class MONGO_PING extends JDBC_PING2 {
             return;
         }
         String cluster_name = getClusterName();
-        try (var mongoClient = getMongoConnection()) {
-            var collection = getCollection(mongoClient);
-            try {
-                List<PingData> list = readFromDB(mongoClient, getClusterName());
-                for (PingData data : list) {
-                    Address addr = data.getAddress();
-                    if (!local_view.containsMember(addr)) {
-                        addDiscoveryResponseToCaches(addr, data.getLogicalName(), data.getPhysicalAddr());
-                        delete(collection, cluster_name, addr);
-                    }
+        var collection = getCollection(getMongoClient());
+        try {
+            List<PingData> list = readFromDB(getMongoClient(), getClusterName());
+            for (PingData data : list) {
+                Address addr = data.getAddress();
+                if (!local_view.containsMember(addr)) {
+                    addDiscoveryResponseToCaches(addr, data.getLogicalName(), data.getPhysicalAddr());
+                    delete(collection, cluster_name, addr);
                 }
-            } catch (Exception e) {
-                log.error(String.format("%s: failed reading from the DB", local_addr), e);
             }
+        } catch (Exception e) {
+            log.error(String.format("%s: failed reading from the DB", local_addr), e);
         }
     }
 
@@ -116,10 +135,8 @@ public class MONGO_PING extends JDBC_PING2 {
 
     @Override
     protected void clearTable(String clustername) {
-        try (var mongoClient = getMongoConnection()) {
-            var collection = getCollection(mongoClient);
-            collection.deleteMany(eq(CLUSTERNAME_KEY, clustername));
-        }
+        var collection = getCollection(getMongoClient());
+        collection.deleteMany(eq(CLUSTERNAME_KEY, clustername));
     }
 
     @Override
@@ -135,8 +152,8 @@ public class MONGO_PING extends JDBC_PING2 {
 
     protected void insert(PingData data, String clustername) {
         lock.lock();
-        try (var mongoClient = getMongoConnection()) {
-            var collection = getCollection(mongoClient);
+        try {
+            var collection = getCollection(getMongoClient());
             Address address = data.getAddress();
             String addr = Util.addressToString(address);
             String name = address instanceof SiteUUID ? ((SiteUUID) address).getName() : NameCache.get(address);
@@ -156,8 +173,9 @@ public class MONGO_PING extends JDBC_PING2 {
     @Override
     protected void createSchema() {
         connectionString = new ConnectionString(connection_url);
-        try (var mongoClient = getMongoConnection()) {
-            var db = mongoClient.getDatabase(connectionString.getDatabase());
+        // Use a temporary client here since this is called during init() before the shared client is created
+        try (var client = MongoClients.create(connectionString)) {
+            var db = client.getDatabase(connectionString.getDatabase());
             db.createCollection(collection_name);
         }
     }
@@ -191,9 +209,7 @@ public class MONGO_PING extends JDBC_PING2 {
 
     @Override
     protected List<PingData> readFromDB(String cluster) throws Exception {
-        try (var mongoClient = getMongoConnection()) {
-            return readFromDB(mongoClient, cluster);
-        }
+        return readFromDB(getMongoClient(), cluster);
     }
 
     protected void delete(MongoCollection<Document> collection, String clustername, Address addressToDelete) {
@@ -208,9 +224,7 @@ public class MONGO_PING extends JDBC_PING2 {
 
     @Override
     protected void delete(String clustername, Address addressToDelete) {
-        try (var mongoClient = getMongoConnection()) {
-            var collection = getCollection(mongoClient);
-            delete(collection, clustername, addressToDelete);
-        }
+        var collection = getCollection(getMongoClient());
+        delete(collection, clustername, addressToDelete);
     }
 }
