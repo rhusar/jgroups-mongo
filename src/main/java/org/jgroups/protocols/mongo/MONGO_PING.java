@@ -7,6 +7,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import com.mongodb.ConnectionString;
+import com.mongodb.MongoCommandException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
@@ -167,6 +168,11 @@ public class MONGO_PING extends JDBC_PING2 {
         try (var client = MongoClients.create(connectionString)) {
             var db = client.getDatabase(connectionString.getDatabase());
             db.createCollection(collection_name);
+        } catch (MongoCommandException mex) {
+            // Ignore "collection already exists" error (code 48)
+            if (mex.getErrorCode() != 48) {
+                throw mex;
+            }
         }
     }
 
