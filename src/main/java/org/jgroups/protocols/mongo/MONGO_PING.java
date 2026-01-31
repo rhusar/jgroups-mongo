@@ -192,7 +192,7 @@ public class MONGO_PING extends JDBC_PING2 {
 
     @Override
     protected void delete(Connection conn, String clustername, Address addressToDelete) {
-        // Ignore conn - its null anyway
+        // Ignore conn - it's null anyway
         this.delete(clustername, addressToDelete);
     }
 
