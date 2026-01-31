@@ -59,11 +59,15 @@ public class MONGO_PING extends JDBC_PING2 {
     @Property(description = "Name of the MongoDB collection used to store cluster member information")
     protected String collection_name = "jgroups-ping";
 
-    protected MongoClient mongoClient;
+    private MongoClient mongoClient;
+    private ConnectionString connectionString;
 
     @Override
     public void init() throws Exception {
         connectionString = new ConnectionString(connection_url);
+        if (connectionString.getDatabase() == null) {
+            throw new IllegalStateException("Database name must be specified in connection_url");
+        }
         mongoClient = MongoClients.create(connectionString);
         super.init();
     }
@@ -99,13 +103,9 @@ public class MONGO_PING extends JDBC_PING2 {
     }
 
     protected MongoCollection<Document> getCollection(MongoClient client) {
-        var connString = new ConnectionString(connection_url);
-        assert connString.getDatabase() != null;
-        var db = client.getDatabase(connString.getDatabase());
-        return db.getCollection(collection_name);
+        assert connectionString.getDatabase() != null; // Cannot be null - validated in MONGO_PING.init()
+        return client.getDatabase(connectionString.getDatabase()).getCollection(collection_name);
     }
-
-    protected ConnectionString connectionString;
 
     @Override
     protected void removeAllNotInCurrentView() {
