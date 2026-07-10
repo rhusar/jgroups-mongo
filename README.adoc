@@ -34,6 +34,10 @@ org.jgroups.mongo:jgroups-mongo
       \- org.mongodb:bson-record-codec
 ----
 
+=== JPMS
+
+The JPMS module name is `org.jgroups.mongo`.
+
 === WildFly
 
 To provision in WildFly, use the following guide in the https://docs.wildfly.org/40/High_Availability_Guide.html#external-protocols[High Availability Guide → External Protocols].
