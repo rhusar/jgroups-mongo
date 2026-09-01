@@ -40,7 +40,7 @@ The JPMS module name is `org.jgroups.mongo`.
 
 === WildFly
 
-To provision in WildFly, use the following guide in the https://docs.wildfly.org/40/High_Availability_Guide.html#external-protocols[High Availability Guide → External Protocols].
+To provision in WildFly, use the following guide in the https://docs.wildfly.org/41/High_Availability_Guide.html#external-protocols[High Availability Guide → External Protocols].
 
 == Configuration
 
