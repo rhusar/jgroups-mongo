@@ -18,7 +18,7 @@ For direct usage in JGroups via Maven, use the following coordinates:
 <dependency>
     <groupId>org.jgroups.mongo</groupId>
     <artifactId>jgroups-mongo</artifactId>
-    <version>1.0.0.Final</version>
+    <version>1.0.0.Beta2</version>
 </dependency>
 ----
 
